@@ -23,26 +23,49 @@ Console::~Console() {
 
 const Console* Console::GetInstance() {
     if (Console::m_instance == nullptr) {
-        Console::m_instance = new Console();
+        static std::mutex mutex;
+        std::lock_guard<std::mutex> lock(mutex);
+
+        if (Console::m_instance == nullptr) {
+            Console::m_instance = new Console();
+        }
     }
 
     return Console::m_instance;
 }
 
+void Console::WWrite(const void* buffer, DWORD size) const {
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    WriteConsoleW(m_hOutput, buffer, size, nullptr, nullptr);
+}
+
+void Console::Write(const void* buffer, DWORD size) const {
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    WriteConsoleA(m_hOutput, buffer, size, nullptr, nullptr);
+}
+
+void Console::WPut(wchar_t c) const {
+    WWrite(&c, 1);
+}
+
+void Console::Put(char c) const {
+    Write(&c, 1);
+}
+
 void Console::Pause() const {
-    HANDLE inputHandle = GetStdHandle(STD_INPUT_HANDLE);
     INPUT_RECORD inputRecord;
     DWORD numEventsRead;
     DWORD previousMode;
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
 
-    GetConsoleMode(inputHandle, &previousMode);
-    SetConsoleMode(inputHandle, previousMode & ~(ENABLE_MOUSE_INPUT | ENABLE_LINE_INPUT));
-    do
-    {
-        ReadConsoleInput(inputHandle, &inputRecord, 1, &numEventsRead);
+    GetConsoleMode(m_hInput, &previousMode);
+    SetConsoleMode(m_hInput, previousMode & ~(ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT | ENABLE_LINE_INPUT));
+    FlushConsoleInputBuffer(m_hInput);
+    do {
+        ReadConsoleInputW(m_hInput, &inputRecord, 1, &numEventsRead);
     } while (inputRecord.EventType != KEY_EVENT || !inputRecord.Event.KeyEvent.bKeyDown);
 
-    SetConsoleMode(inputHandle, previousMode);
+    SetConsoleMode(m_hInput, previousMode);
 }
 
 void Console::WPrintF(const wchar_t* format, ...) const {
@@ -56,10 +79,8 @@ void Console::WPrintFV(const wchar_t* format, va_list args) const {
     int bufferSize = _vscwprintf(format, args) + 1;
     wchar_t* buffer = new wchar_t[bufferSize];
     StringCbVPrintfW(buffer, bufferSize * sizeof(wchar_t), format, args);
-
-    DWORD bytesWritten;
-    WriteConsoleW(m_hOutput, buffer, bufferSize - 1, &bytesWritten, nullptr);
-
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    WriteConsoleW(m_hOutput, buffer, bufferSize - 1, nullptr, nullptr);
     delete[] buffer;
 }
 
@@ -74,9 +95,99 @@ void Console::PrintFV(const char* format, va_list args) const {
     int bufferSize = _vscprintf(format, args) + 1;
     char* buffer = new char[bufferSize];
     StringCbVPrintfA(buffer, bufferSize, format, args);
-
-    DWORD bytesWritten;
-    WriteConsoleA(m_hOutput, buffer, bufferSize - 1, &bytesWritten, nullptr);
-
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    WriteConsoleA(m_hOutput, buffer, bufferSize - 1, nullptr, nullptr);
     delete[] buffer;
+}
+
+std::wstring Console::WReadLine() const {
+    std::wstring buffer;
+    INPUT_RECORD inputRecord;
+    DWORD numEventsRead;
+    DWORD previousMode;
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+
+    GetConsoleMode(m_hInput, &previousMode);
+    SetConsoleMode(m_hInput, previousMode & ~(ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT | ENABLE_LINE_INPUT));
+    FlushConsoleInputBuffer(m_hInput);
+    while (0 != ReadConsoleInputW(m_hInput, &inputRecord, 1, &numEventsRead)) {
+        if (inputRecord.EventType != KEY_EVENT || !inputRecord.Event.KeyEvent.bKeyDown) {
+            continue;
+        }
+
+        if (inputRecord.Event.KeyEvent.uChar.UnicodeChar == L'\r') {
+            WPut(L'\n');
+            break;
+        }
+
+        if (inputRecord.Event.KeyEvent.wVirtualKeyCode == VK_BACK && buffer.size() != 0) {
+            buffer.pop_back();
+            CONSOLE_SCREEN_BUFFER_INFO info;
+            GetConsoleScreenBufferInfo(m_hOutput, &info);
+            if (info.dwCursorPosition.X != 0) {
+                --info.dwCursorPosition.X;
+            }
+            else {
+                info.dwCursorPosition.X = info.dwSize.X - 1;
+                --info.dwCursorPosition.Y;
+            }
+            DWORD written;
+            WriteConsoleOutputCharacterW(m_hOutput, L" ", 1, info.dwCursorPosition, &written);
+            SetConsoleCursorPosition(m_hOutput, info.dwCursorPosition);
+        }
+
+        if (iswprint(inputRecord.Event.KeyEvent.uChar.UnicodeChar)) {
+            buffer += inputRecord.Event.KeyEvent.uChar.UnicodeChar;
+            WPut(inputRecord.Event.KeyEvent.uChar.UnicodeChar);
+        }
+    }
+
+    SetConsoleMode(m_hInput, previousMode);
+    return buffer;
+}
+
+std::string Console::ReadLine() const {
+    std::string buffer;
+    INPUT_RECORD inputRecord;
+    DWORD numEventsRead;
+    DWORD previousMode;
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+
+    GetConsoleMode(m_hInput, &previousMode);
+    SetConsoleMode(m_hInput, previousMode & ~(ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT | ENABLE_LINE_INPUT));
+    FlushConsoleInputBuffer(m_hInput);
+    while (0 != ReadConsoleInputA(m_hInput, &inputRecord, 1, &numEventsRead)) {
+        if (inputRecord.EventType != KEY_EVENT || !inputRecord.Event.KeyEvent.bKeyDown) {
+            continue;
+        }
+
+        if (inputRecord.Event.KeyEvent.uChar.AsciiChar == '\r') {
+            Put('\n');
+            break;
+        }
+
+        if (inputRecord.Event.KeyEvent.wVirtualKeyCode == VK_BACK && buffer.size() != 0) {
+            buffer.pop_back();
+            CONSOLE_SCREEN_BUFFER_INFO info;
+            GetConsoleScreenBufferInfo(m_hOutput, &info);
+            if (info.dwCursorPosition.X != 0) {
+                --info.dwCursorPosition.X;
+            }
+            else {
+                info.dwCursorPosition.X = info.dwSize.X - 1;
+                --info.dwCursorPosition.Y;
+            }
+            DWORD written;
+            WriteConsoleOutputCharacterW(m_hOutput, L" ", 1, info.dwCursorPosition, &written);
+            SetConsoleCursorPosition(m_hOutput, info.dwCursorPosition);
+        }
+
+        if (isprint(inputRecord.Event.KeyEvent.uChar.AsciiChar)) {
+            buffer += inputRecord.Event.KeyEvent.uChar.AsciiChar;
+            Put(inputRecord.Event.KeyEvent.uChar.AsciiChar);
+        }
+    }
+
+    SetConsoleMode(m_hInput, previousMode);
+    return buffer;
 }
