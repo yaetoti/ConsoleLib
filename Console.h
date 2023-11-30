@@ -2,6 +2,7 @@
 
 #include <Windows.h>
 #include <string>
+#include <string_view>
 #include <mutex>
 
 class Console final {
@@ -21,6 +22,8 @@ public:
     void Pause() const;
     std::wstring WReadLine() const;
     std::string ReadLine() const;
+
+    void RedirectStdHandles() const;
 
     static const Console* GetInstance();
 private:

@@ -1,6 +1,9 @@
 #include <strsafe.h>
 #include <cstdarg>
 #include <stdexcept>
+#include <iostream>
+#include <io.h>
+#include <fcntl.h>
 
 #include "Console.h"
 
@@ -190,4 +193,20 @@ std::string Console::ReadLine() const {
 
     SetConsoleMode(m_hInput, previousMode);
     return buffer;
+}
+
+void Console::RedirectStdHandles() const {
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    FILE* stream;
+    freopen_s(&stream, "CONIN$", "r", stdin);
+    freopen_s(&stream, "CONOUT$", "w", stdout);
+    freopen_s(&stream, "CONERR$", "w", stderr);
+    std::cout.clear();
+    std::wcout.clear();
+    std::cin.clear();
+    std::wcin.clear();
+    std::cerr.clear();
+    std::wcerr.clear();
+    std::clog.clear();
+    std::wclog.clear();
 }
