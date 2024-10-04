@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 3.26 FATAL_ERROR)
+project(Project)
+
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(BUILD_SHARED_LIBS OFF)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "build")
+
+add_definitions(
+  -DUNICODE
+  -DWIN32
+  -DWIN32_LEAN_AND_MEAN
+  -DNOMINMAX
+)
+
+add_subdirectory(src/ConsoleLib)

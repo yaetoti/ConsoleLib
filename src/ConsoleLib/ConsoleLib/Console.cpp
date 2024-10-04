@@ -5,7 +5,7 @@
 #include <io.h>
 #include <fcntl.h>
 
-#include "Console.h"
+#include "Console.hpp"
 
 Console* Console::m_instance = nullptr;
 
