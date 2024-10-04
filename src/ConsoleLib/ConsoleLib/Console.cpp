@@ -24,7 +24,7 @@ Console::~Console() {
     FreeConsole();
 }
 
-const Console* Console::GetInstance() {
+const Console* Console::Get() {
     if (Console::m_instance == nullptr) {
         static std::mutex mutex;
         std::lock_guard<std::mutex> lock(mutex);

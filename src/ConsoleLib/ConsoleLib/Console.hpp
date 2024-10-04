@@ -25,7 +25,7 @@ public:
 
     void RedirectStdHandles() const;
 
-    static const Console* GetInstance();
+    static const Console* Get();
 private:
     Console();
     Console(const Console&) = delete;
