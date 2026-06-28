@@ -2,7 +2,6 @@
 #include <cstdarg>
 #include <stdexcept>
 #include <iostream>
-#include <io.h>
 #include <fcntl.h>
 
 #include "Console.hpp"
@@ -11,7 +10,7 @@ Console* Console::m_instance = nullptr;
 
 Console::Console() {
     if (!AllocConsole()) {
-        throw new std::runtime_error("Can't allocate console");
+        throw std::runtime_error("Can't allocate console");
     }
 
     SetConsoleOutputCP(CP_UTF8);
@@ -25,16 +24,16 @@ Console::~Console() {
 }
 
 const Console* Console::Get() {
-    if (Console::m_instance == nullptr) {
+    if (m_instance == nullptr) {
         static std::mutex mutex;
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard lock(mutex);
 
-        if (Console::m_instance == nullptr) {
-            Console::m_instance = new Console();
+        if (m_instance == nullptr) {
+            m_instance = new Console();
         }
     }
 
-    return Console::m_instance;
+    return m_instance;
 }
 
 void Console::WWrite(const void* buffer, DWORD size) const {
@@ -59,7 +58,7 @@ void Console::Pause() const {
     INPUT_RECORD inputRecord;
     DWORD numEventsRead;
     DWORD previousMode;
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    std::lock_guard lock(m_mutex);
 
     GetConsoleMode(m_hInput, &previousMode);
     SetConsoleMode(m_hInput, previousMode & ~(ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT | ENABLE_LINE_INPUT));
@@ -82,7 +81,7 @@ void Console::WPrintFV(const wchar_t* format, va_list args) const {
     int bufferSize = _vscwprintf(format, args) + 1;
     wchar_t* buffer = new wchar_t[bufferSize];
     StringCbVPrintfW(buffer, bufferSize * sizeof(wchar_t), format, args);
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    std::lock_guard lock(m_mutex);
     WriteConsoleW(m_hOutput, buffer, bufferSize - 1, nullptr, nullptr);
     delete[] buffer;
 }
@@ -98,7 +97,7 @@ void Console::PrintFV(const char* format, va_list args) const {
     int bufferSize = _vscprintf(format, args) + 1;
     char* buffer = new char[bufferSize];
     StringCbVPrintfA(buffer, bufferSize, format, args);
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    std::lock_guard lock(m_mutex);
     WriteConsoleA(m_hOutput, buffer, bufferSize - 1, nullptr, nullptr);
     delete[] buffer;
 }
@@ -108,7 +107,7 @@ std::wstring Console::WReadLine() const {
     INPUT_RECORD inputRecord;
     DWORD numEventsRead;
     DWORD previousMode;
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    std::lock_guard lock(m_mutex);
 
     GetConsoleMode(m_hInput, &previousMode);
     SetConsoleMode(m_hInput, previousMode & ~(ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT | ENABLE_LINE_INPUT));
@@ -123,7 +122,7 @@ std::wstring Console::WReadLine() const {
             break;
         }
 
-        if (inputRecord.Event.KeyEvent.wVirtualKeyCode == VK_BACK && buffer.size() != 0) {
+        if (inputRecord.Event.KeyEvent.wVirtualKeyCode == VK_BACK && !buffer.empty()) {
             buffer.pop_back();
             CONSOLE_SCREEN_BUFFER_INFO info;
             GetConsoleScreenBufferInfo(m_hOutput, &info);
@@ -154,7 +153,7 @@ std::string Console::ReadLine() const {
     INPUT_RECORD inputRecord;
     DWORD numEventsRead;
     DWORD previousMode;
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    std::lock_guard lock(m_mutex);
 
     GetConsoleMode(m_hInput, &previousMode);
     SetConsoleMode(m_hInput, previousMode & ~(ENABLE_WINDOW_INPUT | ENABLE_MOUSE_INPUT | ENABLE_LINE_INPUT));
@@ -169,7 +168,7 @@ std::string Console::ReadLine() const {
             break;
         }
 
-        if (inputRecord.Event.KeyEvent.wVirtualKeyCode == VK_BACK && buffer.size() != 0) {
+        if (inputRecord.Event.KeyEvent.wVirtualKeyCode == VK_BACK && !buffer.empty()) {
             buffer.pop_back();
             CONSOLE_SCREEN_BUFFER_INFO info;
             GetConsoleScreenBufferInfo(m_hOutput, &info);
@@ -196,7 +195,7 @@ std::string Console::ReadLine() const {
 }
 
 void Console::RedirectStdHandles() const {
-    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    std::lock_guard lock(m_mutex);
     FILE* stream;
     freopen_s(&stream, "CONIN$", "r", stdin);
     freopen_s(&stream, "CONOUT$", "w", stdout);
